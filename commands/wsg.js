@@ -324,7 +324,18 @@ export async function handleWSGAnswer(sock, msg, context) {
     const lobby = global.activeLobbies?.[from];
     if (!lobby || lobby.state !== 'ingame') return false;
 
-    const canonicalSender = await resolveCanonicalJid(sock, from, sender);
+    let canonicalSender = sender;
+    const alreadyWhitelisted = lobby.players.some(p => p.id === sender);
+
+    if (!alreadyWhitelisted) {
+        try {
+            canonicalSender = await resolveCanonicalJid(sock, from, sender);
+        } catch (e) {
+            console.error('❌ [WSG ANSWER] JID resolve failed, skipping this message:', e.message);
+            return false;
+        }
+    }
+
     const isWhitelisted = lobby.players.some(p => p.id === canonicalSender);
     if (!isWhitelisted) return false;
 
