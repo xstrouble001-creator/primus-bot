@@ -1,0 +1,48 @@
+{
+  "groups": {
+    "120363428680120153@g.us": {
+      "antilink": true,
+      "antitag": false,
+      "antidelete": true,
+      "antibot": false
+    },
+    "120363427676398194@g.us": {
+      "antilink": false
+    },
+    "120363406971887920@g.us": {
+      "antilink": true
+    },
+    "120363429038107944@g.us": {
+      "antilink": true
+    },
+    "120363428811065709@g.us": {
+      "antidelete": true
+    }
+  },
+  "autoEmoji": false,
+  "owners": [
+    "2349131719077",
+    "105480823259328"
+  ],
+  "antitagGroups": [
+    "120363424764034808@g.us",
+    "120363421304067298@g.us",
+    "120363428680120153@g.us",
+    "120363411265028730@g.us",
+    "120363410156324851@g.us"
+  ],
+  "antilinkGroups": [
+    "120363411265028730@g.us",
+    "120363410156324851@g.us"
+  ],
+  "antibotGroups": [
+    "120363428680120153@g.us"
+  ],
+  "workMode": "private",
+  "antilink": {
+    "120363428811065709@g.us": "warn"
+  },
+  "privateCommands": [
+    "musicvideo"
+  ]
+}

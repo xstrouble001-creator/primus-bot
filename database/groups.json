@@ -1,0 +1,21 @@
+{
+  "120363428680120153@g.us": {
+    "antilink": true,
+    "antibot": false,
+    "antitag": false,
+    "antimention": false,
+    "warns": {
+      "105480823259328@lid": 1,
+      "2959836463117@lid": 0
+    }
+  },
+  "120363429038107944@g.us": {
+    "antilink": false,
+    "antibot": false,
+    "antitag": false,
+    "antimention": false,
+    "warns": {
+      "14384667619527@lid": 1
+    }
+  }
+}
