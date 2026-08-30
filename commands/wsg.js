@@ -217,10 +217,18 @@ async function wsgCommand(sock, msg, args, context) {
             return;
         }
 
-        lobby.state = 'ingame';
-        const words = [...CATEGORIES[lobby.category]].sort(() => 0.5 - Math.random()).slice(0, WORDS_PER_MATCH);
-        const { grid, wordLocations } = placeWords(words);
+        let grid, wordLocations;
+        try {
+            const words = [...CATEGORIES[lobby.category]].sort(() => 0.5 - Math.random()).slice(0, WORDS_PER_MATCH);
+            ({ grid, wordLocations } = placeWords(words));
+            if (wordLocations.length === 0) throw new Error('No words could be placed on the grid');
+        } catch (e) {
+            console.error('❌ [WSG START] Failed to build match grid:', e.message);
+            await sock.sendMessage(from, { text: '❌ Failed to start the match (word placement error). The lobby is still open — try #wsg start again.' }, { quoted: msg });
+            return;
+        }
 
+        lobby.state = 'ingame';
         lobby.grid = grid;
         lobby.wordLocations = wordLocations;
         lobby.words = wordLocations.map(w => w.word);
