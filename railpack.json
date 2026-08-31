@@ -1,0 +1,7 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "aptPackages": ["...", "ffmpeg", "python3", "python3-pip"],
+    "startCommand": "pip install --break-system-packages -U yt-dlp && node index.js"
+  }
+}
