@@ -39,7 +39,23 @@ function updatePlayerStats(chatId, jid, name, points, isWinner) {
     saveStats(db);
 }
 
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FONT_FAMILY = 'WSGRoboto';
+
+let fontRegistered = false;
+function ensureFontRegistered() {
+    if (fontRegistered) return;
+    try {
+        GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'fonts', 'Roboto-Bold.ttf'), FONT_FAMILY);
+        fontRegistered = true;
+    } catch (e) {
+        console.error('❌ [PIXELBOMB CANVAS] Failed to register bundled font, falling back to system font:', e.message);
+    }
+}
 
 // Active game lobbies in memory: { [chatId]: gameObject }
 const games = {};
@@ -68,6 +84,7 @@ async function generateGridImage(game) {
     const width = size * tileSize + (size - 1) * gap + padding * 2;
     const height = width;
 
+    ensureFontRegistered();
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
@@ -92,7 +109,7 @@ async function generateGridImage(game) {
 
                 // Tile Number
                 ctx.fillStyle = '#f8fafc';
-                ctx.font = 'bold 28px sans-serif';
+                ctx.font = `bold 28px ${fontRegistered ? FONT_FAMILY : 'sans-serif'}`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(tileNum.toString(), x + tileSize / 2, y + tileSize / 2);
@@ -102,7 +119,7 @@ async function generateGridImage(game) {
                     ctx.fillStyle = '#dc2626';
                     ctx.fillRect(x, y, tileSize, tileSize);
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = 'bold 22px sans-serif';
+                    ctx.font = `bold 22px ${fontRegistered ? FONT_FAMILY : 'sans-serif'}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('🔴 RED', x + tileSize / 2, y + tileSize / 2);
@@ -110,7 +127,7 @@ async function generateGridImage(game) {
                     ctx.fillStyle = '#16a34a';
                     ctx.fillRect(x, y, tileSize, tileSize);
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = 'bold 20px sans-serif';
+                    ctx.font = `bold 20px ${fontRegistered ? FONT_FAMILY : 'sans-serif'}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('🟢 GREEN', x + tileSize / 2, y + tileSize / 2);
@@ -121,7 +138,7 @@ async function generateGridImage(game) {
                     ctx.lineWidth = 3;
                     ctx.strokeRect(x, y, tileSize, tileSize);
                     ctx.fillStyle = '#ef4444';
-                    ctx.font = 'bold 22px sans-serif';
+                    ctx.font = `bold 22px ${fontRegistered ? FONT_FAMILY : 'sans-serif'}`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('💣 -30', x + tileSize / 2, y + tileSize / 2);

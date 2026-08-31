@@ -41,8 +41,10 @@ export default {
             const output = path.resolve(`./temp_${Date.now()}.mp3`);
             const command = `yt-dlp -x --audio-format mp3 -o "${output}" "${video.url}"`;
             
-            exec(command, async (error) => {
+            exec(command, async (error, stdout, stderr) => {
                 if (error || !fs.existsSync(output)) {
+                    console.error('❌ [PLAY DOWNLOAD ERROR]:', error?.message || 'unknown error');
+                    if (stderr) console.error('❌ [PLAY YT-DLP STDERR]:', stderr);
                     return await sock.sendMessage(from, { text: '❌ [SYSTEM ERROR] Download failed.' }, { quoted: msg });
                 }
 
