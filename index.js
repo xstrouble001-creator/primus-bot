@@ -6,7 +6,6 @@ import config from './config.js';
 import { handleWSGAnswer } from './commands/wsg.js';
 import { checkPermissions } from './lib/handler.js';
 import { loadSettings } from './lib/database.js';
-import { handleUndercoverCommands } from './commands/undercover.js';
 import { rememberName, getMentionName } from './lib/nameCache.js';
 import { getAntilinkStrikes, updateAntilinkStrikes } from './lib/db.js';
 
@@ -268,11 +267,6 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
         if (cmdName === "pixelbomb" || cmdName === "pb") return await handlePixelBomb(sock, msg, args, context);
         if (cmdName === 'claim') {
             await handleClaim(sock, msg, args, context);
-            return;
-        }
-
-        if (['ucstart', 'clue', 'vote', 'guess'].includes(cmdName)) {
-            await handleUndercoverCommands(sock, msg, args, context, cmdName);
             return;
         }
 
