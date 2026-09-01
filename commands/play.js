@@ -39,7 +39,7 @@ export default {
             await sock.sendMessage(from, { image: { url: video.thumbnail }, caption }, { quoted: msg });
 
             const output = path.resolve(`./temp_${Date.now()}.mp3`);
-            const command = `yt-dlp -x --audio-format mp3 -o "${output}" "${video.url}"`;
+            const command = `yt-dlp -x --audio-format mp3 --extractor-args "youtube:player_client=android" -o "${output}" "${video.url}"`;
             
             exec(command, async (error, stdout, stderr) => {
                 if (error || !fs.existsSync(output)) {

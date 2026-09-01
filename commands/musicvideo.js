@@ -38,7 +38,7 @@ export default {
             await sock.sendMessage(from, { image: { url: video.thumbnail }, caption }, { quoted: msg });
 
             const output = path.resolve(`./temp_mv_${Date.now()}.mp4`);
-            const command = `yt-dlp -f "bestvideo[vcodec^=avc1][height<=720]+bestaudio[ext=m4a]/best[vcodec^=avc1][ext=mp4]" --recode-video mp4 -o "${output}" "${video.url}"`;
+            const command = `yt-dlp -f "bestvideo[vcodec^=avc1][height<=720]+bestaudio[ext=m4a]/best[vcodec^=avc1][ext=mp4]" --recode-video mp4 --extractor-args "youtube:player_client=android" -o "${output}" "${video.url}"`;
 
             exec(command, async (error) => {
                 if (error || !fs.existsSync(output)) {

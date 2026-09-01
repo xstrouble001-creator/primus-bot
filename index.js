@@ -194,6 +194,40 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
             console.log(`📩 [INCOMING] From: ${senderNum} | Group: ${isGroup} | Admin: ${isAdmin} | Text: "${text}"`);
         }
 
+        // --- PER-USER TIMED MUTE (independent of admin bypass) ---
+        if (isGroup && text && settings.mutedUsers?.[from]?.[sender]) {
+            const expiresAt = settings.mutedUsers[from][sender];
+            if (Date.now() < expiresAt) {
+                await sock.sendMessage(from, { delete: msg.key }).catch((e) => console.error('❌ [MUTEUSER DELETE FAILED]', e));
+                return;
+            } else {
+                delete settings.mutedUsers[from][sender];
+                saveSettings(settings);
+            }
+        }
+
+        // --- ANTITAGADMINS: delete messages that mention a group admin, by non-admins ---
+        if (isGroup && !isOwnerOrSudo && !isAdmin && settings.antitagAdminsGroups?.includes(from) && text) {
+            const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            if (mentionedJids.length > 0) {
+                try {
+                    const groupMetadata = await getGroupMetadata(sessionName, sock, from);
+                    const adminJids = groupMetadata.participants
+                        .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+                        .map(p => p.id.split(':')[0].split('@')[0]);
+                    const taggedAnAdmin = mentionedJids.some(jid => adminJids.includes(jid.split(':')[0].split('@')[0]));
+                    if (taggedAnAdmin) {
+                        const senderNameForTag = getMentionName(sender) || senderNum;
+                        await sock.sendMessage(from, { delete: msg.key }).catch((e) => console.error('❌ [ANTITAGADMINS DELETE FAILED]', e));
+                        await sock.sendMessage(from, { text: `⚠️ [ANTITAGADMINS] @${senderNameForTag} tagging admins is not allowed here!`, mentions: [sender] });
+                        return;
+                    }
+                } catch (e) {
+                    console.error('❌ [ANTITAGADMINS ERROR]:', e.message);
+                }
+            }
+        }
+
         // --- GROUP PROTECTIONS (ANTILINK, ANTISTICKER, ANTITAG) ---
         if (isGroup && !isOwnerOrSudo && !isAdmin) {
             const senderName = getMentionName(sender) || senderNum;

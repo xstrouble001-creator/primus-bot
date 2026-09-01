@@ -4,7 +4,9 @@ export default {
     name: 'ng',
     category: 'games',
     description: 'Primus MD Naughty Bot Lobby & Game Engine',
-    async execute(sock, msg, args, { isSudo, isGroupAdmin }) {
+    async execute(sock, msg, args, context) {
+        const { isSudo, isAdmin } = context;
+        const isGroupAdmin = isAdmin;
         const chatId = msg.key.remoteJid;
         const sender = msg.key.participant || msg.key.remoteJid;
         const subCommand = args[0] ? args[0].toLowerCase() : 'lobby';
@@ -37,7 +39,7 @@ export default {
                 text += `│ • Host launches: #ng start\n`;
                 text += `❖─────────────────────────────❖\n`;
                 text += `💡 Waiting for the host to start the game...\n`;
-                text += `└─ 𝑷𝒐𝑘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`;
+                text += `└─ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`;
 
                 await sock.sendMessage(chatId, { text, mentions });
                 break;
@@ -49,13 +51,13 @@ export default {
                 }
 
                 const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                
+
                 if (mentionedJids.length === 0) {
-                    return await sock.sendMessage(chatId, { text: '⚠️ Mention at least one player to add! Example: `#ng add @player`'});
+                    return await sock.sendMessage(chatId, { text: '⚠️ Mention at least one player to add! Example: `#ng add @player`' });
                 }
 
                 ngManager.addPlayers(chatId, mentionedJids);
-                return this.execute(sock, msg, ['lobby'], { isSudo, isGroupAdmin });
+                return this.execute(sock, msg, ['lobby'], context);
             }
 
             case 'start': {
@@ -69,13 +71,25 @@ export default {
 
                 lobby.started = true;
                 await sock.sendMessage(chatId, { text: '🔥 *[ PRIMUS MD ]*: Naughty Game started! Drawing the first question...' });
-                return this.execute(sock, msg, ['spin'], { isSudo, isGroupAdmin });
+                return this.execute(sock, msg, ['spin'], context);
             }
 
             case 'spin':
             case 'next': {
                 if (!lobby || !lobby.started) {
                     return await sock.sendMessage(chatId, { text: '⚠️ Game is not active. Host must start with `#ng start`.' });
+                }
+
+                const isFirstSpin = lobby.lastAsked === null;
+                const isTheOnePreviouslyAsked = lobby.lastAsked === sender;
+                const isPrivileged = sender === lobby.host || isSudo || isGroupAdmin;
+
+                if (!isFirstSpin && !isTheOnePreviouslyAsked && !isPrivileged) {
+                    const lastAskedTag = `@${lobby.lastAsked.split('@')[0]}`;
+                    return await sock.sendMessage(chatId, {
+                        text: `⚠️ Only ${lastAskedTag} (the player just asked) or the host/admin can spin next!`,
+                        mentions: [lobby.lastAsked]
+                    });
                 }
 
                 const data = ngManager.nextTurn(chatId);
@@ -105,7 +119,7 @@ export default {
                     card += `├▶ *MEDIA REQUIREMENT:* ❌ NONE\n│\n`;
                 }
 
-                card += `└─ 𝑷𝒐𝑘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`;
+                card += `└─ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`;
 
                 await sock.sendMessage(chatId, { text: card, mentions });
                 break;
