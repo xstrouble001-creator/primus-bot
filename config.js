@@ -2,7 +2,7 @@ export default {
     botName: 'Primus Md',
     prefix: '#',
     sessions: [
-      { name: 'lupin', number: '2347053852949' }
+      { name: 'lupin', number: '2349131719077' }
     ],
     devNumber: '2349131719077',
     omdbApiKey: '760bd7f3',
