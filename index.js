@@ -5,7 +5,7 @@ import fs from 'fs';
 import config from './config.js';
 import { handleWSGAnswer } from './commands/wsg.js';
 import { checkPermissions } from './lib/handler.js';
-import { loadSettings } from './lib/database.js';
+import { loadSettings, saveSettings } from './lib/database.js';
 import { rememberName, getMentionName } from './lib/nameCache.js';
 import { getAntilinkStrikes, updateAntilinkStrikes } from './lib/db.js';
 
