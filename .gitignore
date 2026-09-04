@@ -2,3 +2,6 @@ node_modules/
 sessions_lupin/
 *.log
 *.tmp
+
+bot_code.zip
+.env

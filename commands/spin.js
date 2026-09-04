@@ -10,7 +10,7 @@ export default {
     name: 'spin',
     aliases: ['roulette', 'wheel'],
     description: 'Color prediction betting game for the whole group',
-    category: 'games',
+    category: 'game',
     groupOnly: true,
     async execute(sock, msg, args, context) {
         const { from, sender: rawSender, isSudo, isOwner } = context;

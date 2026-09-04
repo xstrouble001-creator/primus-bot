@@ -2,7 +2,7 @@ export default {
     name: 'link',
     aliases: ['grouplink', 'invite'],
     description: 'Get the group invite link',
-    category: 'admin',
+    category: 'group',
     groupOnly: true,
     adminOnly: true,
     botAdmin: true,

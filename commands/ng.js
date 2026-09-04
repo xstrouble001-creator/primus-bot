@@ -2,7 +2,7 @@ import ngManager from '../lib/naughtyGame.js';
 
 export default {
     name: 'ng',
-    category: 'games',
+    category: 'game',
     description: 'Primus MD Naughty Bot Lobby & Game Engine',
     async execute(sock, msg, args, context) {
         const { isSudo, isAdmin } = context;

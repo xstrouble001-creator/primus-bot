@@ -15,33 +15,37 @@ export default {
         }
 
         if (!targetNum) {
-            return sock.sendMessage(from, { text: '⚡ Provide a phone number or reply to a user.\nExample: `#add 2348039336009`' }, { quoted: msg });
+            return await sock.sendMessage(from, { 
+                text: '⚡ Provide a phone number or reply to a user.\nExample: `#add 2348039336009`' 
+            }, { quoted: msg });
         }
 
         const userJid = `${targetNum}@s.whatsapp.net`;
 
         await sock.sendMessage(from, { text: `🔄 Adding +${targetNum} to the group...` }, { quoted: msg });
 
-        // Numbers not saved in the bot's contacts (or with restrictive
-        // privacy settings) can cause groupParticipantsUpdate to hang for
-        // a long time waiting on a WhatsApp server query before it
-        // eventually errors out. Race it against our own timeout so the
-        // bot never appears frozen — if it doesn't resolve quickly, treat
-        // it the same as a failure and fall through to the invite link.
-        const withTimeout = (promise, ms) => Promise.race([
-            promise,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms))
-        ]);
-
         let directAddWorked = false;
+
+        // Safe timeout implementation that clears timer and handles delayed promises
         try {
-            const response = await withTimeout(
-                sock.groupParticipantsUpdate(from, [userJid], 'add'),
-                15000
-            );
-            if (response?.[0]?.status === '200') {
+            let timer;
+            const timeoutPromise = new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('TIMEOUT')), 15000);
+            });
+
+            const updatePromise = sock.groupParticipantsUpdate(from, [userJid], 'add');
+
+            // Catch background rejection if updatePromise fails AFTER timeout
+            updatePromise.catch(err => console.error('❌ [ADD] Background promise rejection caught:', err.message));
+
+            const response = await Promise.race([updatePromise, timeoutPromise]);
+            clearTimeout(timer);
+
+            if (response?.[0]?.status === '200' || response?.[0]?.status === 200) {
                 directAddWorked = true;
-                await sock.sendMessage(from, { text: `✅ +${targetNum} was added to the group directly.` }, { quoted: msg });
+                return await sock.sendMessage(from, { 
+                    text: `✅ +${targetNum} was added to the group directly.` 
+                }, { quoted: msg });
             }
         } catch (e) {
             console.error('❌ [ADD] Direct add failed/timed out:', e.message);
@@ -49,15 +53,33 @@ export default {
 
         if (directAddWorked) return;
 
-        // Fallback: send the person a direct invite link instead.
+        // Fallback: send invite link
         try {
             const code = await sock.groupInviteCode(from);
             const inviteLink = `https://chat.whatsapp.com/${code}`;
-            await sock.sendMessage(userJid, { text: `You've been invited to join a group:\n${inviteLink}` });
-            await sock.sendMessage(from, { text: `⚠️ Couldn't add +${targetNum} directly (likely their privacy settings) — sent them an invite link instead.` }, { quoted: msg });
+
+            let dmSent = false;
+            try {
+                await sock.sendMessage(userJid, { text: `You've been invited to join a group:\n${inviteLink}` });
+                dmSent = true;
+            } catch (dmErr) {
+                console.error('❌ [ADD] Direct DM failed:', dmErr.message);
+            }
+
+            if (dmSent) {
+                await sock.sendMessage(from, { 
+                    text: `⚠️ Couldn't add +${targetNum} directly (likely privacy settings) — sent them an invite link in DM.` 
+                }, { quoted: msg });
+            } else {
+                await sock.sendMessage(from, { 
+                    text: `⚠️ Couldn't add +${targetNum} directly or send them a private message. Here is the invite link for them:\n\n${inviteLink}` 
+                }, { quoted: msg });
+            }
         } catch (e) {
             console.error('❌ [ADD] Invite-link fallback failed:', e.message);
-            await sock.sendMessage(from, { text: `❌ Couldn't add +${targetNum} directly, and sending an invite link also failed. Make sure the bot is a group admin.` }, { quoted: msg });
+            await sock.sendMessage(from, { 
+                text: `❌ Couldn't add +${targetNum} directly, and failed to generate an invite link. Ensure the bot is an admin.` 
+            }, { quoted: msg });
         }
     }
 };

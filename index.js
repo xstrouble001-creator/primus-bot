@@ -12,7 +12,6 @@ import { getAntilinkStrikes, updateAntilinkStrikes } from './lib/db.js';
 process.on('uncaughtException', (err) => {
     console.error('❌ [UNCAUGHT EXCEPTION]', err);
 });
-
 process.on('unhandledRejection', (err) => {
     console.error('❌ [UNHANDLED REJECTION]', err);
 });
@@ -156,7 +155,6 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
         const rawSender = isGroup ? msg.key.participant : (msg.key.fromMe ? sock.user.id : from);
         const sender = rawSender ? rawSender.split(':')[0].split('@')[0] + '@s.whatsapp.net' : '';
         const senderNum = sender ? sender.split('@')[0].replace(/[^0-9]/g, '') : '';
-
         if (sender && msg.pushName) rememberName(sender, msg.pushName);
 
         const botOwnerJid = sock.user?.id || '';
@@ -286,7 +284,6 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
             }
         }
 
-
         const wsgHandled = await handleWSGAnswer(sock, msg, { from, isGroup, sender, body: text });
         if (wsgHandled) return;
 
@@ -312,8 +309,27 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
             return;
         }
 
-        console.log(`⚙️ [EXECUTING]: ${prefix}${cmdName}`);
+        // --- LOCKED COMMAND RESTRICTION CHECK ---
+        const lockedList = config.privateCommands || [];
+        if (lockedList.includes(targetName)) {
+            const devNumber = String(config.devNumber || config.ownerNumber?.[0] || '').replace(/[^0-9]/g, '');
+            const isPrimaryLinkedAccount = msg.key.fromMe || senderNum === devNumber;
 
+            if (!isPrimaryLinkedAccount) {
+                console.log(`🛑 Locked command blocked: ${prefix}${cmdName} (Sender: ${senderNum})`);
+                return await sock.sendMessage(from, {
+                    text:
+                        `⚡ 𝙿 𝚁 𝙸 𝙼 𝚄 𝚂   𝙼 𝙳   •   𝚁𝙴𝚂𝚃𝚁𝙸𝙲𝚃𝙴𝙳 ⚡\n\n` +
+                        `❖──────────【 🔒 𝙻𝙾𝙲𝙺𝙴𝙳  𝙲𝙾𝙼𝙼𝙰𝙽𝙳 】──────────❖\n│\n` +
+                        `│ ⛔ This command is locked by the owner.\n` +
+                        `│ 🛡️ Access is restricted strictly to the primary linked account.\n│\n` +
+                        `❖─────────────────────────────❖\n\n` +
+                        `└─ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`
+                }, { quoted: msg });
+            }
+        }
+
+        console.log(`⚙️ [EXECUTING]: ${prefix}${cmdName}`);
         const allowed = await checkPermissions(sock, msg, command, context);
         if (!allowed) {
             console.log(`🛑 Permission denied for: ${prefix}${cmdName}`);

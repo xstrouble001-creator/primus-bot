@@ -199,6 +199,7 @@ function getAIPick(game) {
     return unrevealed[randIndex].id;
 }
 
+
 // Main Command Handler
 export async function handlePixelBomb(sock, msg, args, context) {
     const { from, sender, pushName } = context;

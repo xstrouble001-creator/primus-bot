@@ -321,6 +321,7 @@ async function wsgCommand(sock, msg, args, context) {
 export default {
     name: 'wsg',
     aliases: ['wordsearch'],
+   category: 'game',
     description: 'Word Search Game',
     async execute(sock, msg, args, context) {
         return await wsgCommand(sock, msg, args, context);

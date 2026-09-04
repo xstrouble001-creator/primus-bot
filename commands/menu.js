@@ -32,7 +32,7 @@ export default {
         const uptime = formatUptime(process.uptime());
         const greeting = getTimeGreeting();
         const userName = pushName || 'User';
-        const targetCategory = args[0]?.toLowerCase();
+        const targetCategory = args.join(' ')?.toLowerCase();
 
         const categories = {};
         commands.forEach((cmd) => {
@@ -45,14 +45,36 @@ export default {
         let selectedBannerPath = '';
 
         if (targetCategory && categories[targetCategory]) {
+            const cmdList = categories[targetCategory];
+            const prefix = config.prefix || '#';
+
+            // Group commands into chunked connected tree rows (3 per line)
+            const chunkSize = 3;
+            let formattedRows = '';
+            const totalChunks = Math.ceil(cmdList.length / chunkSize);
+
+            for (let i = 0; i < cmdList.length; i += chunkSize) {
+                const chunk = cmdList.slice(i, i + chunkSize);
+                const currentChunkIndex = Math.floor(i / chunkSize);
+
+                const badges = chunk.map(c => `{${prefix}${c.name}}`).join('-----');
+                formattedRows += `│ 📜 ${badges}\n`;
+
+                // Add vertical branch if there are more rows following
+                if (currentChunkIndex < totalChunks - 1) {
+                    formattedRows += `│    │\n`;
+                }
+            }
+
+            // Pick a random command from the current category for the dynamic tip
+            const randomCmd = cmdList[Math.floor(Math.random() * cmdList.length)]?.name || 'help';
+
             responseText += `⚡ 𝙿 𝚁 𝙸 𝙼 𝚄 𝚂   𝙼 𝙳 ⚡\n\n`;
-            responseText += `❖──────────【 ${targetCategory.toUpperCase()} 】──────────❖\n│\n`;
-
-            categories[targetCategory].forEach((cmd) => {
-                responseText += `│ 📜 ${config.prefix}${cmd.name}\n`;
-                responseText += `│ └─ 𝙵𝚞𝚗𝚌𝚝𝚒𝚘𝚗 : ${cmd.description || 'No description available.'}\n│\n`;
-            });
-
+            responseText += `❖──────────【 ${targetCategory.toUpperCase()}  】──────────❖\n│\n`;
+            responseText += formattedRows;
+            responseText += `│\n❖─────────────────────────────❖\n`;
+            responseText += `│ 📊 𝚃𝚘𝚝𝚊𝚕 𝙲𝚘𝚖𝚖𝚊𝚗𝚍𝚜 : ${cmdList.length} Active\n`;
+            responseText += `│ 💡 𝚃𝚒𝚙 : 𝚃𝚢𝚙𝚎 ${prefix}${randomCmd} --help 𝚏𝚘𝚛 𝚍𝚎𝚝𝚊𝚒𝚕𝚜\n`;
             responseText += `❖─────────────────────────────❖\n\n`;
             responseText += `└─ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`;
 
@@ -103,7 +125,7 @@ export default {
             responseText += `│ 🏢 𝑪𝒐𝒐𝒑𝒆𝒓𝒂𝒕𝒊𝒐𝒏 : Primus Inc\n`;
             responseText += `│ 📞 𝑾𝒉𝒂𝒕𝒔𝑨𝒑𝒑   : https://wa.me/2349131719077\n`;
             responseText += `│ 💻 𝑮𝒊𝒕𝑯𝒖𝒃    : https://github.com/xstrouble001-creator\n`;
-            responseText += `│ ✈️ 𝑻𝒆𝒍𝒆𝒈𝒓𝒂𝒎   : https://t.me/2348074270051\n`;
+            responseText += `│ ✈️ 𝑻𝒆𝒍𝒆𝒈𝒓𝒂𝒎    : https://t.me/2348074270051\n`;
             responseText += `❖─────────────────────────────❖\n\n`;
 
             responseText += `💡 _Usage: Type ${config.prefix}m general to access sub-menu._\n\n`;
@@ -112,14 +134,25 @@ export default {
             selectedBannerPath = config.banners?.main;
         }
 
-        // Attach local JPEG image buffer if it exists
+        // Try sending media buffer, fall back to text if Baileys upload fails
         if (selectedBannerPath && fs.existsSync(selectedBannerPath)) {
-            await sock.sendMessage(from, {
-                image: fs.readFileSync(selectedBannerPath),
-                caption: responseText
-            }, { quoted: msg });
-        } else {
+            try {
+                const imageBuffer = fs.readFileSync(selectedBannerPath);
+                await sock.sendMessage(from, {
+                    image: imageBuffer,
+                    caption: responseText
+                }, { quoted: msg });
+                return;
+            } catch (mediaErr) {
+                console.warn('⚠️ [MENU MEDIA UPLOAD FAILED]: Falling back to text send.', mediaErr.message);
+            }
+        }
+
+        // Fallback or text-only execution
+        if (loaderKey) {
             await sock.sendMessage(from, { text: responseText, edit: loaderKey });
+        } else {
+            await sock.sendMessage(from, { text: responseText }, { quoted: msg });
         }
     }
 };
