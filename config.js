@@ -42,7 +42,7 @@ export default {
         music: './assets/music.jpeg',
         anime: './assets/anime.jpeg',
         movie: './assets/movie.jpeg',
-        18+: './assets/18+.jpeg',
+        '18+': './assets/18+.jpeg',
         football: './assets/football.jpeg',
         news: './assets/news.jpeg',
         stylish: './assets/stylish.jpeg',
