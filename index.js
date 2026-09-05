@@ -1,17 +1,21 @@
-import { handlePixelBomb, handleClaim } from "./commands/pixelbomb.js";
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } from '@whiskeysockets/baileys';
+import { makeWASocket, DisconnectReason, Browsers } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'fs';
 import config from './config.js';
-import { handleWSGAnswer } from './commands/wsg.js';
+import { useSupabaseAuthState, clearSupabaseAuthState } from './lib/supabaseAuthState.js';
 import { checkPermissions } from './lib/handler.js';
-import { loadSettings, saveSettings } from './lib/database.js';
+import { loadSettings } from './lib/database.js';
+import { renderWSGGrid } from './lib/wsgCanvas.js';
+import { formatWordList } from './commands/wsg.js';
+import { handleClaim } from './commands/pixelbomb.js';
+import { handleUndercoverCommands } from './commands/undercover.js';
 import { rememberName, getMentionName } from './lib/nameCache.js';
 import { getAntilinkStrikes, updateAntilinkStrikes } from './lib/db.js';
 
 process.on('uncaughtException', (err) => {
     console.error('❌ [UNCAUGHT EXCEPTION]', err);
 });
+
 process.on('unhandledRejection', (err) => {
     console.error('❌ [UNHANDLED REJECTION]', err);
 });
@@ -56,7 +60,6 @@ export const loadCommands = async () => {
 
 export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = null) => {
     const { name: sessionName, number: sessionNumber } = sessionEntry;
-    const sessionFolder = `sessions_${sessionName}`;
 
     if (retryCount > 5) {
         console.error(`❌ [${sessionName}] Too many reconnect attempts — stopping.`);
@@ -64,17 +67,16 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
         return;
     }
 
-    const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
+    const { state, saveCreds } = await useSupabaseAuthState(sessionName);
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         auth: state,
-        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        browser: Browsers.macOS('Chrome'),
         syncFullHistory: false,
         getMessage: async () => ({ conversation: '' })
     });
 
-    const isRegistered = Boolean(state.creds?.registered);
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('group-participants.update', ({ id }) => {
         groupCaches.get(sessionName)?.delete(id);
@@ -85,7 +87,7 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
 
-        if (!isRegistered && !sock.authState.creds.registered && !pairingRequested) {
+        if (!sock.authState.creds.registered && !pairingRequested) {
             pairingRequested = true;
             setTimeout(async () => {
                 const phoneNumber = String(sessionNumber || '').replace(/[^0-9]/g, '');
@@ -108,18 +110,13 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
 
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
-            if (statusCode === 428) {
-                console.log(`⚠️ [${sessionName}] Connection replaced (Status 428). Cooling down for 10s...`);
-                setTimeout(() => startBot(sessionEntry, retryCount + 1, onPairingCode), 10000);
-                return;
-            }
             const reconnect = statusCode !== DisconnectReason.loggedOut;
             if (reconnect) {
                 console.log(`⚠️ [${sessionName}] Connection closed (status ${statusCode}). Reconnecting in 3s...`);
                 setTimeout(() => startBot(sessionEntry, retryCount + 1, onPairingCode), 3000);
             } else {
                 console.log(`❌ [${sessionName}] Session logged out. Clearing stale session.`);
-                fs.rmSync(sessionFolder, { recursive: true, force: true });
+                await clearSupabaseAuthState(sessionName);
                 setTimeout(() => startBot(sessionEntry, 0, onPairingCode), 3000);
             }
         } else if (connection === 'open') {
@@ -155,6 +152,7 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
         const rawSender = isGroup ? msg.key.participant : (msg.key.fromMe ? sock.user.id : from);
         const sender = rawSender ? rawSender.split(':')[0].split('@')[0] + '@s.whatsapp.net' : '';
         const senderNum = sender ? sender.split('@')[0].replace(/[^0-9]/g, '') : '';
+
         if (sender && msg.pushName) rememberName(sender, msg.pushName);
 
         const botOwnerJid = sock.user?.id || '';
@@ -190,40 +188,6 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
 
         if (text) {
             console.log(`📩 [INCOMING] From: ${senderNum} | Group: ${isGroup} | Admin: ${isAdmin} | Text: "${text}"`);
-        }
-
-        // --- PER-USER TIMED MUTE (independent of admin bypass) ---
-        if (isGroup && text && settings.mutedUsers?.[from]?.[sender]) {
-            const expiresAt = settings.mutedUsers[from][sender];
-            if (Date.now() < expiresAt) {
-                await sock.sendMessage(from, { delete: msg.key }).catch((e) => console.error('❌ [MUTEUSER DELETE FAILED]', e));
-                return;
-            } else {
-                delete settings.mutedUsers[from][sender];
-                saveSettings(settings);
-            }
-        }
-
-        // --- ANTITAGADMINS: delete messages that mention a group admin, by non-admins ---
-        if (isGroup && !isOwnerOrSudo && !isAdmin && settings.antitagAdminsGroups?.includes(from) && text) {
-            const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            if (mentionedJids.length > 0) {
-                try {
-                    const groupMetadata = await getGroupMetadata(sessionName, sock, from);
-                    const adminJids = groupMetadata.participants
-                        .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
-                        .map(p => p.id.split(':')[0].split('@')[0]);
-                    const taggedAnAdmin = mentionedJids.some(jid => adminJids.includes(jid.split(':')[0].split('@')[0]));
-                    if (taggedAnAdmin) {
-                        const senderNameForTag = getMentionName(sender) || senderNum;
-                        await sock.sendMessage(from, { delete: msg.key }).catch((e) => console.error('❌ [ANTITAGADMINS DELETE FAILED]', e));
-                        await sock.sendMessage(from, { text: `⚠️ [ANTITAGADMINS] @${senderNameForTag} tagging admins is not allowed here!`, mentions: [sender] });
-                        return;
-                    }
-                } catch (e) {
-                    console.error('❌ [ANTITAGADMINS ERROR]:', e.message);
-                }
-            }
         }
 
         // --- GROUP PROTECTIONS (ANTILINK, ANTISTICKER, ANTITAG) ---
@@ -276,7 +240,7 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
                 const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
                 const totalMentions = mentions.length + (quotedParticipant ? 1 : 0);
-                if (totalMentions >= 3) {
+                if (totalMentions >= 4) {
                     await sock.sendMessage(from, { delete: msg.key }).catch(() => {});
                     await sock.sendMessage(from, { text: `⚠️ [ANTITAG] @${senderName} mass tagging (4+ users) is forbidden!`, mentions: [sender] });
                     return;
@@ -284,20 +248,66 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
             }
         }
 
-        const wsgHandled = await handleWSGAnswer(sock, msg, { from, isGroup, sender, body: text });
-        if (wsgHandled) return;
+        // --- WORD SEARCH GAME LISTENER ---
+        if (global.wsgGames && global.wsgGames[from] && text) {
+            const game = global.wsgGames[from];
+            const userGuess = text.trim().toUpperCase();
+            if (game.words.includes(userGuess) && !game.found.includes(userGuess)) {
+                game.found.push(userGuess);
+                game.scores[sender] = (game.scores[sender] || 0) + 20;
+                const wordLoc = game.wordLocations.find(l => l.word === userGuess);
+                if (wordLoc) {
+                    game.foundLocations.push(wordLoc);
+                }
+
+                const updatedImageBuffer = await renderWSGGrid(game.grid, game.foundLocations);
+                const updatedWordList = formatWordList(game.words, game.found);
+                const displayName = msg.pushName || senderNum;
+
+                let replyText = `⚡ 𝙿 𝚁 𝙸 𝙼 𝚄 𝚂    𝙼 𝙳 ⚡\n\n`;
+                replyText += `❖──────────【 𝚆𝙾𝚁𝙳  𝚂𝙴𝙰𝚁𝙲𝙷 】──────────❖\n`;
+                replyText += `│ 🎉 𝙶𝚛𝚎𝚊𝚝  𝙹𝚘𝚋  ${displayName}! (@${senderNum}) 🎯 +𝟸𝟶  𝙿𝚘𝚒𝚗𝚝𝚜!\n`;
+                replyText += `│ 📌 𝙵𝚘𝚞𝚗𝚍  𝚆𝚘𝚛𝚍 : ${userGuess}\n`;
+                replyText += `❖─────────────────────────────❖\n\n`;
+                replyText += `📋 𝚄𝙿𝙳𝙰𝚃𝙴𝙳  𝚆𝙾𝚁𝙳  𝙻𝙸𝚂𝚃:\n${updatedWordList}\n\n`;
+                replyText += `📊 𝙿𝚛𝚘𝚐𝚛𝚎𝚜𝚜 : ${game.found.length} / ${game.words.length} 𝚆𝚘𝚛𝚍𝚜  𝙵𝚘𝚞𝚗𝚍\n\n`;
+                replyText += `└─ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`;
+
+                if (game.found.length === game.words.length) {
+                    clearTimeout(game.timer);
+                    replyText += `\n\n❖──────────【 𝙶𝙰𝙼𝙴  𝙾𝚅𝙴𝚁 】──────────❖\n`;
+                    let topUser = null, topScore = -1;
+                    for (const [user, score] of Object.entries(game.scores)) {
+                        if (score > topScore) { topScore = score; topUser = user; }
+                    }
+                    const winnerNum = topUser ? topUser.split('@')[0] : '𝙽𝚘𝚗𝚎';
+                    replyText += `│ 🏆 𝚆𝙸𝙽𝙽𝙴𝚁 : @${winnerNum} 𝚠𝚒𝚝𝚑  ${topScore}  𝙿𝙾𝙸𝙽𝚃𝚂!\n`;
+                    replyText += `❖─────────────────────────────❖\n\n└─ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`;
+                    delete global.wsgGames[from];
+                    await sock.sendMessage(from, { image: updatedImageBuffer, caption: replyText, mentions: [sender, topUser].filter(Boolean) }, { quoted: msg });
+                    return;
+                } else {
+                    await sock.sendMessage(from, { image: updatedImageBuffer, caption: replyText, mentions: [sender] }, { quoted: msg });
+                    return;
+                }
+            }
+        }
 
         const prefix = config.prefix || '#';
         if (!text.startsWith(prefix)) return;
 
         const args = text.slice(prefix.length).trim().split(/ +/);
         const cmdName = args.shift().toLowerCase();
-        const context = { from, isGroup, sender, pushName: msg.pushName || 'User', commands, sessionName, isAdmin, isBotAdmin, isSudo: isOwnerOrSudo, isOwner: (msg.key.fromMe || owners.includes(senderNum)) };
+        const context = { from, isGroup, sender, pushName: msg.pushName || 'User', commands, sessionName, isAdmin, isBotAdmin };
 
         // --- SUB-COMMAND ROUTING FOR GAMES ---
-        if (cmdName === "pixelbomb" || cmdName === "pb") return await handlePixelBomb(sock, msg, args, context);
         if (cmdName === 'claim') {
             await handleClaim(sock, msg, args, context);
+            return;
+        }
+
+        if (['ucstart', 'clue', 'vote', 'guess'].includes(cmdName)) {
+            await handleUndercoverCommands(sock, msg, args, context, cmdName);
             return;
         }
 
@@ -309,27 +319,8 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
             return;
         }
 
-        // --- LOCKED COMMAND RESTRICTION CHECK ---
-        const lockedList = config.privateCommands || [];
-        if (lockedList.includes(targetName)) {
-            const devNumber = String(config.devNumber || config.ownerNumber?.[0] || '').replace(/[^0-9]/g, '');
-            const isPrimaryLinkedAccount = msg.key.fromMe || senderNum === devNumber;
-
-            if (!isPrimaryLinkedAccount) {
-                console.log(`🛑 Locked command blocked: ${prefix}${cmdName} (Sender: ${senderNum})`);
-                return await sock.sendMessage(from, {
-                    text:
-                        `⚡ 𝙿 𝚁 𝙸 𝙼 𝚄 𝚂   𝙼 𝙳   •   𝚁𝙴𝚂𝚃𝚁𝙸𝙲𝚃𝙴𝙳 ⚡\n\n` +
-                        `❖──────────【 🔒 𝙻𝙾𝙲𝙺𝙴𝙳  𝙲𝙾𝙼𝙼𝙰𝙽𝙳 】──────────❖\n│\n` +
-                        `│ ⛔ This command is locked by the owner.\n` +
-                        `│ 🛡️ Access is restricted strictly to the primary linked account.\n│\n` +
-                        `❖─────────────────────────────❖\n\n` +
-                        `└─ 𝑷𝒐𝒘𝒆𝒓𝒆𝒅 𝒃𝒚 𝑷𝒓𝒊𝒎𝒖𝒔 𝑴𝒅 ──`
-                }, { quoted: msg });
-            }
-        }
-
         console.log(`⚙️ [EXECUTING]: ${prefix}${cmdName}`);
+
         const allowed = await checkPermissions(sock, msg, command, context);
         if (!allowed) {
             console.log(`🛑 Permission denied for: ${prefix}${cmdName}`);
@@ -362,6 +353,7 @@ const startAllSessions = async () => {
     }
 };
 
+// Only auto-start when index.js is run directly (e.g. `node index.js` or via pm2).
 if (import.meta.url === `file://${process.argv[1]}`) {
     startAllSessions();
 }
