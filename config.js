@@ -2,7 +2,7 @@ export default {
     botName: 'Primus Md',
     prefix: '#',
     sessions: [
-      { name: 'lupin', number: '2349131719077' }
+      { name: 'lupin', number: '2347053852949' }
     ],
     devNumber: '2349131719077',
 
@@ -39,14 +39,14 @@ export default {
         settings: './assets/settings.jpeg',
         fun: './assets/fun.jpeg',
         ai: './assets/ai.jpeg',
-        'music hub': './assets/music.jpeg',
-        'anime hub': './assets/anime.jpeg',
-        'movie hub': './assets/movie.jpeg',
+        music: './assets/music.jpeg',
+        anime: './assets/anime.jpeg',
+        movie: './assets/movie.jpeg',
         '18+': './assets/18+.jpeg',
-        'football news': './assets/football.jpeg',
+        football: './assets/football.jpeg',
         news: './assets/news.jpeg',
-        'stylish hub': './assets/stylish.jpeg',
-        'game pub': './assets/game.jpeg',
+        stylish: './assets/stylish.jpeg',
+        game : './assets/game.jpeg',
 
         // Domain expansion categories
         'ban domain': './assets/domain.jpeg',
