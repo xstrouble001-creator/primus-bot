@@ -8,7 +8,6 @@ import { loadSettings } from './lib/database.js';
 import { renderWSGGrid } from './lib/wsgCanvas.js';
 import { formatWordList } from './commands/wsg.js';
 import { handleClaim } from './commands/pixelbomb.js';
-import { handleUndercoverCommands } from './commands/undercover.js';
 import { rememberName, getMentionName } from './lib/nameCache.js';
 import { getAntilinkStrikes, updateAntilinkStrikes } from './lib/db.js';
 
@@ -306,10 +305,7 @@ export const startBot = async (sessionEntry, retryCount = 0, onPairingCode = nul
             return;
         }
 
-        if (['ucstart', 'clue', 'vote', 'guess'].includes(cmdName)) {
-            await handleUndercoverCommands(sock, msg, args, context, cmdName);
-            return;
-        }
+      
 
         const targetName = commands.has(cmdName) ? cmdName : aliases.get(cmdName);
         const command = commands.get(targetName);
